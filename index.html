@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thunder Deployments</title>
+<meta name="description" content="Thunder Energy deployment portfolio by product line, environment and status.">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='6' fill='%23f5b301'/><path fill='%231a1400' d='M13 4 6 13.5h5l-1 6.5 7-9.5h-5z'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #f0f2f5;
+    --border: #e4e7ec;
+    --border-strong: #d0d5dd;
+    --text: #0f1419;
+    --muted: #5b6574;
+    --faint: #8a93a1;
+    --accent: #e3a400;
+    --accent-strong: #c98f00;
+    --accent-ink: #1a1400;
+    --hero-glow: rgba(245, 179, 1, .16);
+    --prod: #12804a;
+    --prod-bg: #e4f4eb;
+    --dev: #2d5fd3;
+    --dev-bg: #e6edfc;
+    --trial: #b25e00;
+    --trial-bg: #fcefdc;
+    --off: #98a2b3;
+    --off-bg: #eef0f3;
+    --shadow: 0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.06);
+    --shadow-hover: 0 10px 24px -6px rgba(16,24,40,.14), 0 2px 6px rgba(16,24,40,.06);
+    --pop-bg: #141922;
+    --pop-text: #f1f4f8;
+    --pop-muted: #9aa5b5;
+    --pop-tile: rgba(255,255,255,.07);
+    --pop-border: rgba(255,255,255,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0a0d12;
+      --surface: #121720;
+      --surface-2: #19202b;
+      --border: #222a37;
+      --border-strong: #2e3848;
+      --text: #ecf0f5;
+      --muted: #9aa5b6;
+      --faint: #6d7889;
+      --accent: #f5b301;
+      --accent-strong: #ffc933;
+      --hero-glow: rgba(245, 179, 1, .13);
+      --prod: #4cd08c;
+      --prod-bg: rgba(76,208,140,.12);
+      --dev: #82a8ff;
+      --dev-bg: rgba(130,168,255,.12);
+      --trial: #f3a94d;
+      --trial-bg: rgba(243,169,77,.13);
+      --off: #6d7889;
+      --off-bg: rgba(255,255,255,.06);
+      --shadow: 0 1px 0 rgba(255,255,255,.02) inset;
+      --shadow-hover: 0 14px 30px -8px rgba(0,0,0,.6);
+      --pop-bg: #252e3c;
+      --pop-text: #f3f6fa;
+      --pop-muted: #a9b4c4;
+      --pop-tile: rgba(255,255,255,.07);
+      --pop-border: rgba(255,255,255,.12);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0a0d12;
+    --surface: #121720;
+    --surface-2: #19202b;
+    --border: #222a37;
+    --border-strong: #2e3848;
+    --text: #ecf0f5;
+    --muted: #9aa5b6;
+    --faint: #6d7889;
+    --accent: #f5b301;
+    --accent-strong: #ffc933;
+    --hero-glow: rgba(245, 179, 1, .13);
+    --prod: #4cd08c;
+    --prod-bg: rgba(76,208,140,.12);
+    --dev: #82a8ff;
+    --dev-bg: rgba(130,168,255,.12);
+    --trial: #f3a94d;
+    --trial-bg: rgba(243,169,77,.13);
+    --off: #6d7889;
+    --off-bg: rgba(255,255,255,.06);
+    --shadow: 0 1px 0 rgba(255,255,255,.02) inset;
+    --shadow-hover: 0 14px 30px -8px rgba(0,0,0,.6);
+    --pop-bg: #252e3c;
+    --pop-text: #f3f6fa;
+    --pop-muted: #a9b4c4;
+    --pop-tile: rgba(255,255,255,.07);
+    --pop-border: rgba(255,255,255,.12);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 128px; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 32px; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ── Hero ─────────────────────────────────────────── */
+  .hero {
+    position: relative; overflow: hidden;
+    background:
+      radial-gradient(900px 360px at 8% -20%, var(--hero-glow), transparent 70%),
+      radial-gradient(700px 300px at 100% 0%, color-mix(in srgb, var(--dev) 8%, transparent), transparent 70%);
+    border-bottom: 1px solid var(--border);
+  }
+  .hero::after {
+    /* faint grid texture */
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
+    background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 70% 90% at 20% 0%, #000 0%, transparent 65%);
+    -webkit-mask-image: radial-gradient(ellipse 70% 90% at 20% 0%, #000 0%, transparent 65%);
+  }
+  .hero .wrap { position: relative; z-index: 1; padding-top: 28px; padding-bottom: 36px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -.01em; font-size: 15px; }
+  .mark {
+    width: 32px; height: 32px; border-radius: 9px; flex: none;
+    background: linear-gradient(145deg, #ffd24d, #f5b301 55%, #e09a00); color: var(--accent-ink);
+    display: grid; place-items: center; box-shadow: 0 4px 14px -4px rgba(245,179,1,.6);
+  }
+  .brand small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); letter-spacing: 0; }
+  .top-actions { display: flex; align-items: center; gap: 8px; }
+  .asof {
+    font-size: 12px; color: var(--muted); border: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 70%, transparent);
+    padding: 6px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  }
+  .asof .live { width: 7px; height: 7px; border-radius: 50%; background: var(--prod); box-shadow: 0 0 0 3px var(--prod-bg); }
+  .icon-btn {
+    font: inherit; border: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 70%, transparent); color: var(--muted);
+    width: 34px; height: 34px; border-radius: 999px; cursor: pointer; display: grid; place-items: center;
+  }
+  .icon-btn:hover { color: var(--text); border-color: var(--border-strong); }
+
+  .headline { margin-top: 44px; max-width: 760px; }
+  .kicker { font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-strong); }
+  h1 { font-size: 44px; line-height: 1.08; margin: 10px 0 0; letter-spacing: -.035em; font-weight: 800; }
+  .lede { color: var(--muted); font-size: 17px; margin: 14px 0 0; max-width: 620px; }
+
+  /* KPIs */
+  .kpis { display: grid; grid-template-columns: 1.35fr repeat(4, 1fr); gap: 12px; margin-top: 36px; }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px 18px 16px;
+    box-shadow: var(--shadow); min-width: 0; display: flex; flex-direction: column;
+  }
+  .kpi .label { font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 7px; }
+  .kpi .label i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .kpi .value { font-size: 36px; font-weight: 700; letter-spacing: -.03em; line-height: 1.1; margin-top: 10px; }
+  .kpi .value small { font-size: 16px; font-weight: 600; color: var(--faint); letter-spacing: 0; margin-left: 2px; }
+  .kpi .cap { font-size: 12.5px; color: var(--muted); margin-top: auto; padding-top: 8px; }
+  .kpi.primary {
+    background: linear-gradient(160deg, color-mix(in srgb, var(--prod) 12%, var(--surface)), var(--surface) 70%);
+    border-color: color-mix(in srgb, var(--prod) 30%, var(--border));
+  }
+  .kpi.primary .value { font-size: 44px; }
+  .meter { height: 6px; border-radius: 999px; background: var(--off-bg); overflow: hidden; margin-top: 12px; }
+  .meter span { display: block; height: 100%; border-radius: inherit; background: var(--prod); }
+
+  /* Mix bars */
+  .mix { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .mix-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; box-shadow: var(--shadow); min-width: 0; }
+  .mix-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .mix-head h3 { margin: 0; font-size: 13px; font-weight: 600; }
+  .mix-head span { font-size: 12px; color: var(--muted); }
+  .bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; margin: 12px 0 12px; gap: 2px; background: var(--off-bg); }
+  .bar span { display: block; height: 100%; min-width: 4px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--muted); }
+  .legend b { color: var(--text); font-weight: 600; margin-left: 2px; }
+  .legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 6px; vertical-align: 0; }
+
+  /* ── Toolbar ──────────────────────────────────────── */
+  .toolbar {
+    position: sticky; top: 0; z-index: 30;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px);
+    border-bottom: 1px solid var(--border);
+  }
+  .toolbar .wrap { display: flex; align-items: center; gap: 12px; padding-top: 12px; padding-bottom: 12px; flex-wrap: wrap; }
+  nav.sections { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; flex: 1 1 auto; min-width: 0; }
+  nav.sections::-webkit-scrollbar { display: none; }
+  nav.sections a {
+    text-decoration: none; font-size: 13px; font-weight: 500; color: var(--muted);
+    padding: 6px 12px; border-radius: 8px; white-space: nowrap;
+  }
+  nav.sections a:hover { color: var(--text); background: var(--surface-2); }
+  nav.sections a .n { color: var(--faint); font-variant-numeric: tabular-nums; margin-left: 5px; font-size: 12px; }
+  .search {
+    flex: 0 1 260px; display: flex; align-items: center; gap: 8px; min-width: 180px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 0 10px;
+  }
+  .search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+  .search input { border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 14px; padding: 8px 0; width: 100%; }
+  .search input::placeholder { color: var(--faint); }
+  .search svg { color: var(--faint); flex: none; }
+  .search kbd { font: 11px "JetBrains Mono", monospace; color: var(--faint); border: 1px solid var(--border); border-radius: 5px; padding: 0 5px; }
+  .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; flex: none; }
+  .seg button {
+    font: inherit; font-size: 13px; font-weight: 500; border: 0; background: transparent; color: var(--muted);
+    padding: 5px 11px; border-radius: 7px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .seg button:hover { color: var(--text); }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(16,24,40,.12); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex: none; }
+
+  /* ── Sections ─────────────────────────────────────── */
+  main { padding: 40px 0 72px; }
+  section.product { margin-bottom: 56px; }
+  .product-head {
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+    padding-bottom: 14px; margin-bottom: 6px; border-bottom: 1px solid var(--border);
+  }
+  .product-head .idx { font: 600 12px "JetBrains Mono", monospace; color: var(--accent-strong); letter-spacing: .04em; }
+  .product-head h2 { margin: 4px 0 0; font-size: 26px; letter-spacing: -.025em; font-weight: 700; line-height: 1.15; }
+  .product-head p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .chip { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .chip.total { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+
+  .env-group { margin-top: 22px; min-width: 0; }
+  .env-group h3 {
+    margin: 0 0 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; font-weight: 600;
+    display: flex; align-items: center; gap: 8px; color: var(--muted);
+  }
+  .env-group h3 .n { color: var(--faint); font-weight: 500; letter-spacing: 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 12px; }
+
+  .env-prod { color: var(--prod); background: var(--prod-bg); }
+  .env-dev { color: var(--dev); background: var(--dev-bg); }
+  .env-trial { color: var(--trial); background: var(--trial-bg); }
+  .dot.env-prod { background: var(--prod); }
+  .dot.env-dev { background: var(--dev); }
+  .dot.env-trial { background: var(--trial); }
+
+  /* ── Cards ────────────────────────────────────────── */
+  .card {
+    position: relative; display: flex; align-items: flex-start; gap: 14px; text-decoration: none;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px;
+    box-shadow: var(--shadow); min-width: 0;
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); z-index: 5; }
+  .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; z-index: 5; }
+  .card.no-url { background: transparent; box-shadow: none; border-style: dashed; }
+  .card.no-url > .logo, .card.no-url > .meta { opacity: .6; }
+  .card.no-url:hover { transform: none; box-shadow: none; border-color: var(--border-strong); }
+
+  .logo {
+    width: 44px; height: 44px; border-radius: 11px; flex: none; overflow: hidden;
+    display: grid; place-items: center; border: 1px solid var(--border);
+    font-weight: 700; font-size: 15px; letter-spacing: .01em;
+  }
+  .logo.img { background: #fff; }
+  .logo img { width: 100%; height: 100%; object-fit: contain; padding: 7px; display: block; }
+  .card.inactive .logo { filter: grayscale(1); opacity: .65; }
+
+  .meta { min-width: 0; flex: 1; }
+  .name { font-weight: 600; font-size: 15px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 18px; }
+  .host { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .note { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .ext { position: absolute; top: 14px; right: 14px; color: var(--faint); transition: color .15s ease, transform .15s ease; }
+  .card:hover .ext { color: var(--accent-strong); transform: translate(1px, -1px); }
+
+  .info { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 10px; align-items: center; }
+  .pill {
+    font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .s-active { color: var(--prod); background: var(--prod-bg); }
+  .s-active::before { box-shadow: 0 0 0 0 currentColor; animation: pulse 2.4s ease-out infinite; }
+  .s-inactive { color: var(--off); background: var(--off-bg); }
+  .s-pending { color: var(--faint); background: transparent; border: 1px dashed var(--border-strong); }
+  .s-pending::before { display: none; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 5px transparent; } }
+  .srv-hint { font-size: 11.5px; color: var(--muted); white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+
+  /* Server popover on hover */
+  .pop {
+    position: absolute; left: 0; right: 0; top: calc(100% + 10px); z-index: 20;
+    background: var(--pop-bg); color: var(--pop-text);
+    border: 1px solid var(--pop-border); border-radius: 12px; padding: 12px 14px 14px;
+    box-shadow: 0 18px 40px -8px rgba(0,0,0,.55), 0 4px 12px rgba(0,0,0,.25);
+    cursor: default; pointer-events: none;
+    opacity: 0; visibility: hidden; transform: translateY(-4px) scale(.98); transform-origin: top center;
+    transition: opacity .14s ease, transform .14s ease, visibility .14s;
+  }
+  .pop::before {
+    content: ""; position: absolute; left: 30px; top: -6px; width: 10px; height: 10px;
+    background: var(--pop-bg); border: 1px solid var(--pop-border); border-right: 0; border-bottom: 0;
+    transform: rotate(45deg);
+  }
+  .pop.up { top: auto; bottom: calc(100% + 10px); transform: translateY(4px) scale(.98); transform-origin: bottom center; }
+  .pop.up::before { top: auto; bottom: -6px; border: 1px solid var(--pop-border); border-left: 0; border-top: 0; }
+  .card:hover .pop, .card:focus-visible .pop { opacity: 1; visibility: visible; transform: none; }
+  .pop .srv-block + .srv-block { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--pop-border); }
+  .eyebrow { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #f5b301; margin-bottom: 4px; }
+  .server-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+  .server-head h4 { margin: 0; font-size: 14px; font-weight: 600; color: var(--pop-text); }
+  .prov { font-size: 11px; font-weight: 600; color: var(--pop-text); background: var(--pop-tile); border: 1px solid var(--pop-border); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .specs { display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: 6px; margin-top: 10px; }
+  .spec { background: var(--pop-tile); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+  .spec span { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: .07em; color: var(--pop-muted); }
+  .spec b { font-size: 13px; font-weight: 600; color: var(--pop-text); font-variant-numeric: tabular-nums; display: block; }
+
+  .empty { color: var(--muted); text-align: center; padding: 80px 0; }
+  .empty b { display: block; color: var(--text); font-size: 16px; margin-bottom: 4px; }
+
+  footer { border-top: 1px solid var(--border); color: var(--faint); font-size: 12.5px; }
+  footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-top: 22px; padding-bottom: 32px; }
+  footer .conf { display: inline-flex; align-items: center; gap: 8px; }
+
+  @media (max-width: 1080px) {
+    .kpis { grid-template-columns: repeat(3, 1fr); }
+    .kpi.primary { grid-column: span 3; }
+  }
+  @media (max-width: 720px) {
+    .wrap { padding: 0 16px; }
+    .headline { margin-top: 32px; }
+    h1 { font-size: 32px; }
+    .lede { font-size: 15px; }
+    .kpis { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .kpi.primary { grid-column: span 2; }
+    .kpi { padding: 14px; }
+    .kpi .value { font-size: 28px; }
+    .kpi.primary .value { font-size: 36px; }
+    .mix { grid-template-columns: 1fr; gap: 10px; }
+    .asof .full { display: none; }
+    .toolbar .wrap { gap: 8px; }
+    nav.sections { order: 3; flex-basis: 100%; }
+    .search { flex: 1 1 100%; }
+    .search kbd { display: none; }
+    .seg { flex: 1; }
+    .seg button { flex: 1; justify-content: center; padding: 6px 4px; }
+    .product-head { flex-direction: column; align-items: flex-start; }
+    .chips { justify-content: flex-start; }
+    .product-head h2 { font-size: 22px; }
+    .grid { grid-template-columns: 1fr; }
+    html { scroll-padding-top: 150px; }
+  }
+
+  @media print {
+    .toolbar, .icon-btn, .pop, .ext { display: none !important; }
+    body { background: #fff; }
+    .card, .kpi, .mix-card { box-shadow: none; break-inside: avoid; }
+    section.product { break-inside: auto; }
+    .s-active::before { animation: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before { animation: none !important; transition: none !important; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <div class="topbar">
+        <div class="brand">
+          <div class="mark" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
+          </div>
+          <div>Thunder Energy<small>Deployment Portfolio</small></div>
+        </div>
+        <div class="top-actions">
+          <span class="asof"><span class="live"></span><span class="full">Updated&nbsp;</span><span id="asof"></span></span>
+          <button class="icon-btn" id="themeBtn" title="Switch light / dark" aria-label="Switch light or dark theme">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="headline">
+        <div class="kicker">Customer deployments</div>
+        <h1>Thunder across every customer, in one view.</h1>
+        <p class="lede">Every Thunder deployment by product line and environment, with live status and where it runs. Open any card to go to that customer's platform.</p>
+      </div>
+
+      <div class="kpis" id="kpis"></div>
+      <div class="mix" id="mix"></div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="wrap">
+      <nav class="sections" id="sectionNav" aria-label="Sections"></nav>
+      <label class="search">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Search" autocomplete="off" aria-label="Search deployments">
+        <kbd>/</kbd>
+      </label>
+      <div class="seg" role="group" aria-label="Environment filter" id="envFilter"></div>
+    </div>
+  </div>
+
+  <main class="wrap" id="main"></main>
+
+  <footer>
+    <div class="wrap">
+      <span class="conf">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+        Thunder Energy · Internal and confidential
+      </span>
+      <span id="foot"></span>
+    </div>
+  </footer>
+
+<script src="deployments.js"></script>
+<script>
+(() => {
+  const DATA = Object.assign({ sections: [], servers: [], deployments: [] }, window.THUNDER);
+  const SERVERS = Object.fromEntries(DATA.servers.map((s) => [s.id, s]));
+  const shortServer = (id) => (SERVERS[id]?.name || id).replace(/^Thunder\s+/i, "").replace(/\s+(Server|VM)$/i, "");
+  const ENVS = [
+    { id: "prod", label: "Production", short: "Prod" },
+    { id: "dev", label: "Development", short: "Dev" },
+    { id: "trial", label: "Trials", short: "Trials" },
+  ];
+  const state = { q: "", env: "all" };
+
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const host = (u) => { try { const x = new URL(u); return x.host + (x.pathname === "/" ? "" : x.pathname); } catch { return u; } };
+  const initials = (n) => n.split(/[^A-Za-z0-9]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  const hue = (n) => { let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+  const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0);
+
+  // Read filters from the URL hash so links like #env=prod&q=jazz are shareable
+  function readHash() {
+    const params = new URLSearchParams(location.hash.slice(1));
+    state.env = ["prod", "dev", "trial"].includes(params.get("env")) ? params.get("env") : "all";
+    state.q = params.get("q") || "";
+    $("#q").value = state.q;
+  }
+  readHash();
+  window.addEventListener("hashchange", () => { readHash(); renderEnvFilter(); render(); });
+
+  function syncHash() {
+    const p = new URLSearchParams();
+    if (state.env !== "all") p.set("env", state.env);
+    if (state.q) p.set("q", state.q);
+    const h = p.toString();
+    history.replaceState(null, "", h ? "#" + h : location.pathname + location.search);
+  }
+
+  function matches(d) {
+    if (state.env !== "all" && d.env !== state.env) return false;
+    if (!state.q) return true;
+    const q = state.q.toLowerCase();
+    const servers = (d.hosts || []).flatMap((h) => [SERVERS[h.server]?.name, SERVERS[h.server]?.provider]);
+    return [d.name, d.url, d.note, d.status, ...servers].some((v) => (v || "").toLowerCase().includes(q));
+  }
+
+  // ── Header: KPIs and mix bars ─────────────────────────
+  function renderOverview() {
+    const all = DATA.deployments;
+    const external = all.filter((d) => d.section !== "domains");
+    const by = (e) => all.filter((d) => d.env === e).length;
+    const active = all.filter((d) => d.status === "active").length;
+    const inactive = all.filter((d) => d.status === "inactive").length;
+    const unknown = all.length - active - inactive;
+    const customers = new Set(external.map((d) => d.name.toLowerCase())).size;
+    const providers = [...new Set(DATA.servers.map((s) => /on-?prem/i.test(s.provider) ? "On-premises" : s.provider))];
+
+    const kpi = (label, value, cap, opts = {}) => `<div class="kpi${opts.primary ? " primary" : ""}">
+      <div class="label">${opts.dot ? `<i style="background:var(--${opts.dot})"></i>` : ""}${label}</div>
+      <div class="value num">${value}</div>
+      ${opts.meter != null ? `<div class="meter"><span style="width:${opts.meter}%"></span></div>` : ""}
+      <div class="cap">${cap}</div>
+    </div>`;
+
+    $("#kpis").innerHTML = [
+      kpi("Live deployments", `${active}<small>/ ${all.length}</small>`, `${pct(active, all.length)}% of all deployments are active`, { primary: true, dot: "prod", meter: pct(active, all.length) }),
+      kpi("Customers", customers, "Across all product lines"),
+      kpi("In production", by("prod"), "Customers in full rollout", { dot: "prod" }),
+      kpi("Pilots and trials", by("trial"), "Being evaluated by customers", { dot: "trial" }),
+      kpi("Servers", DATA.servers.length, esc(providers.join(", "))),
+    ].join("");
+
+    const seg = (n, color, label) => n ? `<span style="width:${pct(n, all.length)}%;background:var(--${color})" title="${label}: ${n}"></span>` : "";
+    const leg = (n, color, label) => `<span><i style="background:var(--${color})"></i>${label}<b class="num">${n}</b></span>`;
+    $("#mix").innerHTML = `
+      <div class="mix-card">
+        <div class="mix-head"><h3>By environment</h3><span class="num">${all.length} deployments</span></div>
+        <div class="bar">${seg(by("prod"), "prod", "Production")}${seg(by("dev"), "dev", "Development")}${seg(by("trial"), "trial", "Trials")}</div>
+        <div class="legend">${leg(by("prod"), "prod", "Production")}${leg(by("dev"), "dev", "Development")}${leg(by("trial"), "trial", "Trials")}</div>
+      </div>
+      <div class="mix-card">
+        <div class="mix-head"><h3>By status</h3><span class="num">${pct(active, all.length)}% live</span></div>
+        <div class="bar">${seg(active, "prod", "Active")}${seg(inactive, "off", "Inactive")}${seg(unknown, "border-strong", "Not tracked")}</div>
+        <div class="legend">${leg(active, "prod", "Active")}${leg(inactive, "off", "Inactive")}${unknown ? leg(unknown, "border-strong", "Not tracked yet") : ""}</div>
+      </div>`;
+  }
+
+  // ── Cards ─────────────────────────────────────────────
+  function popHTML(d) {
+    const byServer = {};
+    for (const h of d.hosts || []) (byServer[h.server] ||= []).push(h);
+    const blocks = Object.keys(byServer).map((id) => {
+      const s = SERVERS[id] || { name: id };
+      const spec = (label, v) => `<div class="spec"><span>${label}</span><b>${esc(v || "—")}</b></div>`;
+      return `<div class="srv-block">
+        <div class="eyebrow">Hosted on</div>
+        <div class="server-head"><h4>${esc(s.name)}</h4>${s.provider ? `<span class="prov">${esc(s.provider)}</span>` : ""}</div>
+        <div class="specs">${spec("RAM", s.ram)}${spec("Disk", s.disk)}${spec("CPU", s.cpu)}</div>
+      </div>`;
+    }).join("");
+    return blocks ? `<div class="pop" role="tooltip">${blocks}</div>` : "";
+  }
+
+  function infoHTML(d) {
+    const status = !d.url && !d.status ? `<span class="pill s-pending">Awaiting frontend</span>`
+      : d.status ? `<span class="pill s-${d.status === "active" ? "active" : "inactive"}">${d.status === "active" ? "Active" : "Inactive"}</span>` : "";
+    const hint = d.hosts?.length ? `<span class="srv-hint"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>${esc(shortServer(d.hosts[0].server))}</span>` : "";
+    return status || hint ? `<div class="info">${status}${hint}</div>` : "";
+  }
+
+  // Logo: explicit `logo`, else the domain's site icon, else coloured initials
+  function logoHTML(d) {
+    const h = hue(d.name);
+    const initialsHTML = `<span style="color:hsl(${h} 60% 50%)">${esc(initials(d.name))}</span>`;
+    const tint = `background:hsl(${h} 70% 50% / .12)`;
+    const src = d.logo || (d.domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(d.domain)}&sz=128` : "");
+    if (!src) return `<div class="logo" style="${tint}">${initialsHTML}</div>`;
+    return `<div class="logo img" data-tint="${tint}" data-initials="${esc(initials(d.name))}" data-hue="${h}"><img src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>`;
+  }
+
+  // Swap to initials when an icon fails to load or is only a tiny generic placeholder
+  function toInitials(img) {
+    const box = img.parentNode; if (!box?.classList.contains("img")) return;
+    box.classList.remove("img"); box.setAttribute("style", box.dataset.tint);
+    box.innerHTML = `<span style="color:hsl(${box.dataset.hue} 60% 50%)">${box.dataset.initials}</span>`;
+  }
+  const checkLogo = (img) => { if (img.complete && img.naturalWidth < 32) toInitials(img); };
+  document.addEventListener("load", (e) => { if (e.target.matches?.(".logo img")) checkLogo(e.target); }, true);
+  document.addEventListener("error", (e) => { if (e.target.matches?.(".logo img")) toInitials(e.target); }, true);
+
+  function cardHTML(d) {
+    const meta = `${logoHTML(d)}
+      <div class="meta">
+        <div class="name">${esc(d.name)}</div>
+        <div class="host">${d.url ? esc(host(d.url)) : "No public URL"}</div>
+        ${d.note ? `<div class="note">${esc(d.note)}</div>` : ""}
+        ${infoHTML(d)}
+      </div>`;
+    const cls = d.status === "inactive" ? " inactive" : "";
+    if (!d.url) return `<div class="card no-url${cls}"${d.hosts?.length ? ' tabindex="0"' : ""}>${meta}${popHTML(d)}</div>`;
+    return `<a class="card${cls}" href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">
+      ${meta}${popHTML(d)}
+      <svg class="ext" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+    </a>`;
+  }
+
+  function renderEnvFilter() {
+    const opts = [{ id: "all", label: "All" }, ...ENVS];
+    $("#envFilter").innerHTML = opts.map((o) =>
+      `<button data-env="${o.id}" aria-pressed="${state.env === o.id}">${o.id !== "all" ? `<span class="dot env-${o.id}"></span>` : ""}${o.id === "all" ? "All" : o.short}</button>`
+    ).join("");
+  }
+
+  function render() {
+    const visible = DATA.deployments.filter(matches);
+    const groups = DATA.sections.map((s) => ({ ...s, items: visible.filter((d) => d.section === s.id) })).filter((g) => g.items.length);
+
+    $("#sectionNav").innerHTML = groups
+      .map((g) => `<a href="#sec-${g.id}" data-jump="${g.id}">${esc(g.name)}<span class="n">${g.items.length}</span></a>`).join("");
+
+    const html = groups.map((g, i) => {
+      const counts = ENVS.map((e) => [e, g.items.filter((d) => d.env === e.id).length]).filter(([, n]) => n);
+      const envBlocks = counts.map(([e]) => {
+        // Live first, then inactive, then those without a URL; alphabetical within each
+        const rank = (d) => (!d.url ? 2 : d.status === "inactive" ? 1 : 0);
+        const items = g.items.filter((d) => d.env === e.id).sort((a, b) => (rank(a) - rank(b)) || a.name.localeCompare(b.name));
+        return `<div class="env-group">
+          <h3><span class="dot env-${e.id}"></span>${e.label}<span class="n num">${items.length}</span></h3>
+          <div class="grid">${items.map(cardHTML).join("")}</div>
+        </div>`;
+      }).join("");
+      return `<section class="product" id="sec-${g.id}">
+        <div class="product-head">
+          <div>
+            <div class="idx">${String(i + 1).padStart(2, "0")}</div>
+            <h2>${esc(g.name)}</h2>
+            ${g.blurb ? `<p>${esc(g.blurb)}</p>` : ""}
+          </div>
+          <div class="chips">
+            ${counts.map(([e, n]) => `<span class="chip env-${e.id}"><span class="dot env-${e.id}"></span><span class="num">${n}</span> ${e.short}</span>`).join("")}
+            <span class="chip total num">${g.items.length} total</span>
+          </div>
+        </div>
+        ${envBlocks}
+      </section>`;
+    }).join("");
+
+    $("#main").innerHTML = html || `<div class="empty"><b>No matching deployments</b>Try a different search or environment.</div>`;
+    document.querySelectorAll(".logo img").forEach((img) => img.complete && checkLogo(img));
+  }
+
+  // Open the server popover upward when there isn't room below the card
+  $("#main").addEventListener("mouseover", (e) => {
+    const card = e.target.closest(".card"); const pop = card?.querySelector(".pop");
+    if (!pop || card.contains(e.relatedTarget)) return;
+    pop.classList.remove("up");
+    if (card.getBoundingClientRect().bottom + pop.offsetHeight + 16 > innerHeight) pop.classList.add("up");
+  });
+
+  // Events
+  $("#q").addEventListener("input", (e) => { state.q = e.target.value.trim(); syncHash(); render(); });
+  $("#envFilter").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    state.env = b.dataset.env; syncHash(); renderEnvFilter(); render();
+  });
+  // Section links scroll without overwriting the filter hash
+  $("#sectionNav").addEventListener("click", (e) => {
+    const a = e.target.closest("a[data-jump]"); if (!a) return;
+    e.preventDefault();
+    document.getElementById("sec-" + a.dataset.jump)?.scrollIntoView({ behavior: "smooth" });
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "/" && document.activeElement !== $("#q")) { e.preventDefault(); $("#q").focus(); }
+    if (e.key === "Escape" && document.activeElement === $("#q")) { $("#q").value = ""; state.q = ""; syncHash(); render(); $("#q").blur(); }
+  });
+
+  // Theme toggle (remembered per browser)
+  const root = document.documentElement;
+  try { const t = localStorage.getItem("theme"); if (t) root.dataset.theme = t; } catch {}
+  $("#themeBtn").addEventListener("click", () => {
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("theme", root.dataset.theme); } catch {}
+  });
+
+  const updated = new Date(document.lastModified).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  $("#asof").textContent = updated;
+  $("#foot").textContent = `${DATA.deployments.length} deployments · ${DATA.servers.length} servers · Updated ${updated}`;
+
+  renderOverview(); renderEnvFilter(); render();
+})();
+</script>
+</body>
+</html>
