@@ -422,16 +422,99 @@
     </div>
   </footer>
 
-<script src="deployments.js"></script>
+<script>
+// ─────────────────────────────────────────────────────────────
+// Thunder deployments — product-line sections and server specs.
+// The deployments themselves (name, env, URL, section, status, server, website, note) come
+// from the "Thunder Projects and Pilots" sheet; scripts/sync_sheet.py copies it into sheet.js.
+//
+// sections:    the product lines shown on the page, in display order. The sheet's Section
+//              column matches a section's name or id; an unknown name gets its own section
+//              at the end. Sections with no deployments are hidden automatically.
+//
+// servers:     the machines deployments run on, matched by the sheet's Server column.
+//   id        Short id (e.g. "jazz"); the sheet can use this or the name
+//   name      Display name, e.g. "Thunder Jazz Server" (the sheet can say just "Jazz")
+//   provider  e.g. "DigitalOcean", "Amazon EC2", "On-premises (SCO)"
+//   node      Node.js version
+//   ram / disk / cpu   Specs as shown (strings)
+// ─────────────────────────────────────────────────────────────
+
+window.THUNDER = {
+  sections: [
+    { id: "thunder", name: "Thunder", blurb: "Telecom and tower energy monitoring" },
+    { id: "utility", name: "Utility", blurb: "Power utilities and distribution companies" },
+    { id: "dc", name: "DC", blurb: "Data center deployments" },
+    { id: "rmg", name: "RMG", blurb: "RMG deployments" },
+    { id: "cratus", name: "Cratus", blurb: "Cratus x Thunder" },
+    { id: "domains", name: "Domains", blurb: "Internal, demo and lab environments" },
+  ],
+
+  servers: [
+    { id: "jazz", name: "Thunder Jazz Server", provider: "DigitalOcean", node: "v22.14.0", ram: "8 GB", disk: "160 GB", cpu: "4" },
+    { id: "ufone", name: "Thunder Ufone Server", provider: "Amazon EC2", node: "v20.14.0", ram: "4 GB", disk: "40 GB", cpu: "2" },
+    { id: "telenor", name: "Thunder Telenor Server", provider: "DigitalOcean", node: "v18.15.0", ram: "4 GB", disk: "80 GB", cpu: "2" },
+    { id: "poc", name: "Thunder POC Server", provider: "DigitalOcean", node: "v20.18.3", ram: "8 GB", disk: "160 GB + 50 GB", cpu: "4" },
+    { id: "disco-be", name: "Thunder Disco BE Server", provider: "Amazon EC2", node: "v18.17.1", ram: "1 GB", disk: "20 GB", cpu: "2" },
+    { id: "toa", name: "Thunder TOA VM", provider: "DigitalOcean", node: "v24.11.1", ram: "8 GB", disk: "60 GB + 500 GB", cpu: "4" },
+    { id: "demo", name: "Thunder Demo Engro Server", provider: "Amazon EC2", node: "v20.18.0", ram: "8 GB", disk: "300 GB", cpu: "2" },
+    { id: "deodar", name: "Thunder Deodar Server", provider: "Amazon EC2", node: "v24.11.0", ram: "8 GB", disk: "100 GB", cpu: "" },
+    { id: "sco", name: "Thunder SCO Server", provider: "On-premises (SCO)", node: "v24.14.1", ram: "16 GB", disk: "500 GB", cpu: "8" },
+    { id: "cybernet", name: "Thunder Cybernet Server", provider: "On-premises (Cybernet)", node: "v20.19.0", ram: "128 GB", disk: "5.09 TB", cpu: "80" },
+  ],
+};
+
+</script>
+<script src="sheet.js"></script>
 <script>
 (() => {
-  const DATA = Object.assign({ sections: [], servers: [], deployments: [] }, window.THUNDER);
+  const DATA = Object.assign({ sections: [], servers: [] }, window.THUNDER);
+  let SHEET = Object.assign({ rows: [] }, window.THUNDER_SHEET);
   const SERVERS = Object.fromEntries(DATA.servers.map((s) => [s.id, s]));
   const shortServer = (id) => (SERVERS[id]?.name || id).replace(/^Thunder\s+/i, "").replace(/\s+(Server|VM)$/i, "");
+
+  // Every deployment is a row in the sheet (sheet.js); deployments.js only names the
+  // sections and describes the servers that the sheet's Server column refers to.
+  const key = (s) => String(s || "").trim().toLowerCase();
+  const findServer = (name) => DATA.servers.find((s) => [s.id, s.name, shortServer(s.id)].map(key).includes(key(name)));
+  // "Jazz :3002" or "POC :3001, POC :3000" -> [{ server, port }]
+  const parseHosts = (text) => String(text || "").split(/[,;]/).map((part) => {
+    const port = part.match(/:\s*(\d+)/)?.[1];
+    const name = part.replace(/:\s*\d+/, "").trim();
+    return name && { server: findServer(name)?.id || name, port: port && Number(port) };
+  }).filter(Boolean);
+  const sectionFor = (name) => {
+    if (!key(name)) return "thunder";
+    const found = DATA.sections.find((s) => key(s.id) === key(name) || key(s.name) === key(name));
+    if (found) return found.id;
+    // A section typed in the sheet that deployments.js doesn't list yet
+    const id = key(name).replace(/[^a-z0-9]+/g, "-");
+    if (!DATA.sections.some((s) => s.id === id)) DATA.sections.push({ id, name: String(name).trim() });
+    return id;
+  };
+  const isLoopback = (u) => { try { return /^(localhost|127\.|\[::1\])/.test(new URL(u).hostname); } catch { return false; } };
+  const bareDomain = (w) => String(w || "").trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+  const toDeployments = (rows) => rows.map((row) => {
+    const local = isLoopback(row.url);
+    const status = key(row.status);
+    return {
+      name: row.name,
+      env: row.env,
+      group: row.group,
+      section: sectionFor(row.section),
+      url: local ? "" : row.url || "",
+      status: status === "active" || status === "inactive" ? status : "",
+      hosts: parseHosts(row.server),
+      domain: bareDomain(row.website),
+      note: row.note || (local ? "Local only" : ""),
+    };
+  });
+  DATA.deployments = toDeployments(SHEET.rows);
+
   const ENVS = [
     { id: "prod", label: "Production", short: "Prod" },
     { id: "dev", label: "Development", short: "Dev" },
-    { id: "trial", label: "Trials", short: "Trials" },
+    { id: "trial", label: "Pilots", short: "Pilots" },
   ];
   const state = { q: "", env: "all" };
 
@@ -471,7 +554,7 @@
   // ── Header: KPIs and mix bars ─────────────────────────
   function renderOverview() {
     const all = DATA.deployments;
-    const external = all.filter((d) => d.section !== "domains");
+    const external = all.filter((d) => d.section !== "domains" && d.domain !== "thunderenergy.ai");
     const by = (e) => all.filter((d) => d.env === e).length;
     const active = all.filter((d) => d.status === "active").length;
     const inactive = all.filter((d) => d.status === "inactive").length;
@@ -490,7 +573,7 @@
       kpi("Live deployments", `${active}<small>/ ${all.length}</small>`, `${pct(active, all.length)}% of all deployments are active`, { primary: true, dot: "prod", meter: pct(active, all.length) }),
       kpi("Customers", customers, "Across all product lines"),
       kpi("In production", by("prod"), "Customers in full rollout", { dot: "prod" }),
-      kpi("Pilots and trials", by("trial"), "Being evaluated by customers", { dot: "trial" }),
+      kpi("Pilots", by("trial"), "Being evaluated by customers", { dot: "trial" }),
       kpi("Servers", DATA.servers.length, esc(providers.join(", "))),
     ].join("");
 
@@ -499,8 +582,8 @@
     $("#mix").innerHTML = `
       <div class="mix-card">
         <div class="mix-head"><h3>By environment</h3><span class="num">${all.length} deployments</span></div>
-        <div class="bar">${seg(by("prod"), "prod", "Production")}${seg(by("dev"), "dev", "Development")}${seg(by("trial"), "trial", "Trials")}</div>
-        <div class="legend">${leg(by("prod"), "prod", "Production")}${leg(by("dev"), "dev", "Development")}${leg(by("trial"), "trial", "Trials")}</div>
+        <div class="bar">${seg(by("prod"), "prod", "Production")}${seg(by("dev"), "dev", "Development")}${seg(by("trial"), "trial", "Pilots")}</div>
+        <div class="legend">${leg(by("prod"), "prod", "Production")}${leg(by("dev"), "dev", "Development")}${leg(by("trial"), "trial", "Pilots")}</div>
       </div>
       <div class="mix-card">
         <div class="mix-head"><h3>By status</h3><span class="num">${pct(active, all.length)}% live</span></div>
@@ -647,11 +730,28 @@
     try { localStorage.setItem("theme", root.dataset.theme); } catch {}
   });
 
-  const updated = new Date(document.lastModified).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-  $("#asof").textContent = updated;
-  $("#foot").textContent = `${DATA.deployments.length} deployments · ${DATA.servers.length} servers · Updated ${updated}`;
+  // "Updated" is the last time the sheet's rows changed (set by scripts/sync_sheet.py)
+  function renderFooter() {
+    const updated = new Date(SHEET.updated || document.lastModified).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    $("#asof").textContent = updated;
+    const projects = DATA.deployments.filter((d) => d.group !== "pilots").length;
+    $("#foot").textContent = `${projects} projects · ${DATA.deployments.length - projects} pilots · ${DATA.servers.length} servers · From the Projects and Pilots sheet, updated ${updated}`;
+  }
 
-  renderOverview(); renderEnvFilter(); render();
+  renderOverview(); renderEnvFilter(); render(); renderFooter();
+
+  // Pick up sheet edits without a reload: re-read sheet.js every minute and redraw if it changed
+  async function poll() {
+    try {
+      const text = await (await fetch(`sheet.js?t=${Date.now()}`, { cache: "no-store" })).text();
+      const next = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+      if (next.updated === SHEET.updated) return;
+      SHEET = next;
+      DATA.deployments = toDeployments(SHEET.rows);
+      renderOverview(); render(); renderFooter();
+    } catch {}
+  }
+  if (location.protocol !== "file:") setInterval(poll, 60000);
 })();
 </script>
 </body>
