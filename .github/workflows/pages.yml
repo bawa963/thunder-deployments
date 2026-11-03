@@ -1,1 +1,57 @@
-.github/workflows/pages.yml
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Pull the Projects and Pilots sheet every 15 minutes; redeploys only when it changed
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync from the Excel sheet
+        id: sync
+        env:
+          SHEET_URL: ${{ secrets.SHEET_URL }}
+        run: |
+          if [ -z "$SHEET_URL" ]; then
+            echo "::warning::SHEET_URL secret is not set; using the committed sheet.js"
+          else
+            python3 "$(ls scripts/sync_sheet.py sync_sheet.py 2>/dev/null | head -1)"
+          fi
+          if git diff --quiet -- sheet.js; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Sync sheet.js from the Projects and Pilots sheet" -- sheet.js
+            git pull --rebase && git push
+          fi
+
+      - if: github.event_name != 'schedule' || steps.sync.outputs.changed == 'true'
+        uses: actions/configure-pages@v5
+      - if: github.event_name != 'schedule' || steps.sync.outputs.changed == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - if: github.event_name != 'schedule' || steps.sync.outputs.changed == 'true'
+        id: deployment
+        uses: actions/deploy-pages@v4
