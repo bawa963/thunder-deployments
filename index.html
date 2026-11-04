@@ -149,6 +149,17 @@
     width: 34px; height: 34px; border-radius: 999px; cursor: pointer; display: grid; place-items: center;
   }
   .icon-btn:hover { color: var(--text); border-color: var(--border-strong); }
+  .sync-btn {
+    font: inherit; cursor: pointer;
+    font-size: 12px; font-weight: 600; color: var(--text); text-decoration: none; border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface) 70%, transparent); padding: 6px 11px; border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .sync-btn:hover { border-color: var(--border-strong); background: var(--surface-2); }
+  .sync-btn[hidden] { display: none; }
+  .sync-btn:disabled { cursor: default; color: var(--muted); }
+  .sync-btn.busy svg { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   .headline { margin-top: 44px; max-width: 760px; }
   .kicker { font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-strong); }
@@ -342,7 +353,7 @@
     .kpi .value { font-size: 28px; }
     .kpi.primary .value { font-size: 36px; }
     .mix { grid-template-columns: 1fr; gap: 10px; }
-    .asof .full { display: none; }
+    .asof .full, .sync-btn .full { display: none; }
     .toolbar .wrap { gap: 8px; }
     nav.sections { order: 3; flex-basis: 100%; }
     .search { flex: 1 1 100%; }
@@ -357,7 +368,7 @@
   }
 
   @media print {
-    .toolbar, .icon-btn, .pop, .ext { display: none !important; }
+    .toolbar, .icon-btn, .sync-btn, .pop, .ext { display: none !important; }
     body { background: #fff; }
     .card, .kpi, .mix-card { box-shadow: none; break-inside: avoid; }
     section.product { break-inside: auto; }
@@ -381,6 +392,10 @@
         </div>
         <div class="top-actions">
           <span class="asof"><span class="live"></span><span class="full">Updated&nbsp;</span><span id="asof"></span></span>
+          <button class="sync-btn" id="syncBtn" type="button" hidden title="Pull the latest sheet now">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/></svg>
+            <span class="full" id="syncLabel">Sync now</span>
+          </button>
           <button class="icon-btn" id="themeBtn" title="Switch light / dark" aria-label="Switch light or dark theme">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
           </button>
@@ -441,8 +456,13 @@
 // ─────────────────────────────────────────────────────────────
 
 window.THUNDER = {
+  // URL of the sync worker (worker/sync-worker.js) behind the page's "Sync now" button.
+  // Empty hides the button on the published site.
+  syncUrl: "https://thunder-sync.bawa-ptf.workers.dev",
+
   sections: [
     { id: "thunder", name: "Thunder", blurb: "Telecom and tower energy monitoring" },
+    { id: "global-it", name: "Global IT", blurb: "IoT devices monitoring" },
     { id: "utility", name: "Utility", blurb: "Power utilities and distribution companies" },
     { id: "dc", name: "DC", blurb: "Data center deployments" },
     { id: "rmg", name: "RMG", blurb: "RMG deployments" },
@@ -483,11 +503,20 @@ window.THUNDER = {
     const name = part.replace(/:\s*\d+/, "").trim();
     return name && { server: findServer(name)?.id || name, port: port && Number(port) };
   }).filter(Boolean);
+  // Sections come from the sheet's Sections tab (order, names, descriptions); deployments.js
+  // only supplies fallbacks for a sheet without that tab, or a section with no description there.
+  const DEFAULT_SECTIONS = DATA.sections;
+  const toSections = (sections) => (sections?.length ? sections : DEFAULT_SECTIONS).map((s) => {
+    const id = s.id || key(s.name).replace(/[^a-z0-9]+/g, "-");
+    const fallback = DEFAULT_SECTIONS.find((d) => d.id === id || key(d.name) === key(s.name));
+    return { id, name: s.name, blurb: s.description ?? s.blurb ?? fallback?.blurb ?? "" };
+  });
+  DATA.sections = toSections(SHEET.sections);
   const sectionFor = (name) => {
-    if (!key(name)) return "thunder";
+    if (!key(name)) return DATA.sections[0]?.id || "thunder";
     const found = DATA.sections.find((s) => key(s.id) === key(name) || key(s.name) === key(name));
     if (found) return found.id;
-    // A section typed in the sheet that deployments.js doesn't list yet
+    // A section used by a row but missing from the Sections tab still shows, at the end
     const id = key(name).replace(/[^a-z0-9]+/g, "-");
     if (!DATA.sections.some((s) => s.id === id)) DATA.sections.push({ id, name: String(name).trim() });
     return id;
@@ -745,12 +774,45 @@ window.THUNDER = {
     try {
       const text = await (await fetch(`sheet.js?t=${Date.now()}`, { cache: "no-store" })).text();
       const next = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
-      if (next.updated === SHEET.updated) return;
+      if (next.updated === SHEET.updated) return false;
       SHEET = next;
+      DATA.sections = toSections(SHEET.sections);
       DATA.deployments = toDeployments(SHEET.rows);
       renderOverview(); render(); renderFooter();
-    } catch {}
+      return true;
+    } catch { return false; }
   }
+
+  // "Sync now" asks the sync worker (worker/sync-worker.js) to run the GitHub workflow, then
+  // watches sheet.js for the result. The local preview server (scripts/serve.py) answers "sync" itself.
+  const local = ["localhost", "127.0.0.1"].includes(location.hostname);
+  const syncUrl = local ? "sync" : DATA.syncUrl;
+  const syncBtn = $("#syncBtn"), syncLabel = $("#syncLabel");
+  const setSync = (label, busy) => {
+    syncLabel.textContent = label; syncBtn.disabled = busy; syncBtn.classList.toggle("busy", busy);
+  };
+  if (syncUrl) {
+    syncBtn.hidden = false;
+    syncBtn.addEventListener("click", async () => {
+      setSync("Syncing…", true);
+      try {
+        const res = await fetch(syncUrl, { method: "POST" });
+        if (!res.ok) throw new Error(res.status);
+      } catch {
+        setSync("Sync failed", false);
+        setTimeout(() => setSync("Sync now", false), 4000);
+        return;
+      }
+      // The workflow and Pages deploy take a minute or two; check every 10s for up to 4 minutes
+      for (let i = 0; i < 24; i++) {
+        await new Promise((r) => setTimeout(r, local ? 2000 : 10000));
+        if (await poll()) { setSync("Updated", false); break; }
+        if (i === 23) setSync("No changes", false);
+      }
+      setTimeout(() => setSync("Sync now", false), 4000);
+    });
+  }
+
   if (location.protocol !== "file:") setInterval(poll, 60000);
 })();
 </script>
