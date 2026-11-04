@@ -769,12 +769,29 @@ window.THUNDER = {
 
   renderOverview(); renderEnvFilter(); render(); renderFooter();
 
-  // Pick up sheet edits without a reload: re-read sheet.js every minute and redraw if it changed
-  async function poll() {
+  // Live data comes from the sync Worker (worker/sync-worker.js), which reads the sheet straight from
+  // SharePoint. sheet.js, kept current by the GitHub workflow, is the fallback if the Worker is down.
+  // The local preview server (scripts/serve.py) refreshes sheet.js itself, so it skips the Worker.
+  const local = ["localhost", "127.0.0.1"].includes(location.hostname);
+  const workerUrl = local ? "" : (DATA.syncUrl || "").replace(/\/$/, "");
+  const sameData = (a, b) => JSON.stringify([a.sections || [], a.rows]) === JSON.stringify([b.sections || [], b.rows]);
+
+  async function fetchSheet(fresh) {
+    if (workerUrl) {
+      try {
+        const res = await fetch(`${workerUrl}/data${fresh ? "?fresh=1" : ""}`, { cache: "no-store" });
+        if (res.ok) return await res.json();
+      } catch {}
+    }
+    const text = await (await fetch(`sheet.js?t=${Date.now()}`, { cache: "no-store" })).text();
+    return JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+  }
+
+  // Redraw when the sheet changed; returns whether it did
+  async function poll(fresh) {
     try {
-      const text = await (await fetch(`sheet.js?t=${Date.now()}`, { cache: "no-store" })).text();
-      const next = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
-      if (next.updated === SHEET.updated) return false;
+      const next = await fetchSheet(fresh);
+      if (sameData(next, SHEET)) return false;
       SHEET = next;
       DATA.sections = toSections(SHEET.sections);
       DATA.deployments = toDeployments(SHEET.rows);
@@ -783,37 +800,32 @@ window.THUNDER = {
     } catch { return false; }
   }
 
-  // "Sync now" asks the sync worker (worker/sync-worker.js) to run the GitHub workflow, then
-  // watches sheet.js for the result. The local preview server (scripts/serve.py) answers "sync" itself.
-  const local = ["localhost", "127.0.0.1"].includes(location.hostname);
-  const syncUrl = local ? "sync" : DATA.syncUrl;
+  // "Sync now" reads the sheet right away. On the published site it also asks the Worker to run
+  // the GitHub workflow, so the sheet.js fallback catches up too.
   const syncBtn = $("#syncBtn"), syncLabel = $("#syncLabel");
   const setSync = (label, busy) => {
     syncLabel.textContent = label; syncBtn.disabled = busy; syncBtn.classList.toggle("busy", busy);
   };
-  if (syncUrl) {
+  if (local || workerUrl) {
     syncBtn.hidden = false;
     syncBtn.addEventListener("click", async () => {
       setSync("Syncing…", true);
       try {
-        const res = await fetch(syncUrl, { method: "POST" });
-        if (!res.ok) throw new Error(res.status);
+        if (local) await fetch("sync", { method: "POST" });
+        const changed = await poll(true);
+        if (workerUrl && changed) fetch(workerUrl, { method: "POST" }).catch(() => {});
+        setSync(changed ? "Updated" : "No changes", false);
       } catch {
         setSync("Sync failed", false);
-        setTimeout(() => setSync("Sync now", false), 4000);
-        return;
-      }
-      // The workflow and Pages deploy take a minute or two; check every 10s for up to 4 minutes
-      for (let i = 0; i < 24; i++) {
-        await new Promise((r) => setTimeout(r, local ? 2000 : 10000));
-        if (await poll()) { setSync("Updated", false); break; }
-        if (i === 23) setSync("No changes", false);
       }
       setTimeout(() => setSync("Sync now", false), 4000);
     });
   }
 
-  if (location.protocol !== "file:") setInterval(poll, 60000);
+  if (location.protocol !== "file:") {
+    poll();
+    setInterval(poll, 30000);
+  }
 })();
 </script>
 </body>
