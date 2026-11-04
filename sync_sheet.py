@@ -3,10 +3,12 @@
     SHEET_URL='<SharePoint share link>' python3 scripts/sync_sheet.py
     python3 scripts/sync_sheet.py path/to/local.xlsx
 
-The sheet is the list of deployments: one row per deployment, under "Projects" and
-"Pilots" heading rows. Columns are found by their header, so they can be reordered:
-  Project Name (required) | deployments | Hyperlink | Section | Status | Server | Website | Note
-sheet.js is only rewritten when the rows change, so its timestamp is the last sheet edit.
+The sheet lists one row per deployment, under heading rows (text in column A only):
+  a section heading such as "Thunder", "Global IT" or "DC" starts a section, in page order;
+  "Projects" and "Pilots" headings split a section into projects and pilots.
+Columns are found by their header, so they can be reordered:
+  Project Name (required) | deployments | Hyperlink | Status | Server | Website | Note
+sheet.js is only rewritten when the data changes, so its timestamp is the last sheet edit.
 Uses the standard library only (runs as-is in GitHub Actions).
 """
 import http.cookiejar
@@ -42,37 +44,44 @@ def download(share_url):
     return data
 
 
-def read_cells(xlsx):
-    """First worksheet as [(row number, {column letter: (text, hyperlink)})]."""
+def read_sheets(xlsx):
+    """Every worksheet as {tab name: [(row number, {column letter: (text, hyperlink)})]}, in tab order."""
     z = zipfile.ZipFile(BytesIO(xlsx))
     names = z.namelist()
     shared = []
     if "xl/sharedStrings.xml" in names:
         for si in ET.fromstring(z.read("xl/sharedStrings.xml")).findall("m:si", NS):
             shared.append("".join(t.text or "" for t in si.iter("{%s}t" % NS["m"])))
-    rels = {}
-    if "xl/worksheets/_rels/sheet1.xml.rels" in names:
-        for rel in ET.fromstring(z.read("xl/worksheets/_rels/sheet1.xml.rels")).findall("pr:Relationship", NS):
-            rels[rel.get("Id")] = rel.get("Target")
-    sheet = ET.fromstring(z.read("xl/worksheets/sheet1.xml"))
-    links = {h.get("ref"): rels.get(h.get(RID), "") for h in sheet.findall("m:hyperlinks/m:hyperlink", NS)}
-    rows = []
-    for row in sheet.findall("m:sheetData/m:row", NS):
-        cells = {}
-        for c in row.findall("m:c", NS):
-            ref = c.get("r")
-            v = c.find("m:v", NS)
-            if c.get("t") == "s" and v is not None:
-                text = shared[int(v.text)]
-            elif c.get("t") == "inlineStr":
-                text = "".join(t.text or "" for t in c.iter("{%s}t" % NS["m"]))
-            else:
-                text = v.text if v is not None else ""
-            text = " ".join((text or "").split())
-            if text or links.get(ref):
-                cells[re.match(r"[A-Z]+", ref).group()] = (text, links.get(ref, ""))
-        rows.append((int(row.get("r")), cells))
-    return rows
+    targets = {rel.get("Id"): rel.get("Target") for rel in
+               ET.fromstring(z.read("xl/_rels/workbook.xml.rels")).findall("pr:Relationship", NS)}
+    sheets = {}
+    for tab in ET.fromstring(z.read("xl/workbook.xml")).findall("m:sheets/m:sheet", NS):
+        path = "xl/" + targets[tab.get(RID)].lstrip("/").removeprefix("xl/")
+        rels_path = path.replace("worksheets/", "worksheets/_rels/") + ".rels"
+        rels = {}
+        if rels_path in names:
+            for rel in ET.fromstring(z.read(rels_path)).findall("pr:Relationship", NS):
+                rels[rel.get("Id")] = rel.get("Target")
+        sheet = ET.fromstring(z.read(path))
+        links = {h.get("ref"): rels.get(h.get(RID), "") for h in sheet.findall("m:hyperlinks/m:hyperlink", NS)}
+        rows = []
+        for row in sheet.findall("m:sheetData/m:row", NS):
+            cells = {}
+            for c in row.findall("m:c", NS):
+                ref = c.get("r")
+                v = c.find("m:v", NS)
+                if c.get("t") == "s" and v is not None:
+                    text = shared[int(v.text)]
+                elif c.get("t") == "inlineStr":
+                    text = "".join(t.text or "" for t in c.iter("{%s}t" % NS["m"]))
+                else:
+                    text = v.text if v is not None else ""
+                text = " ".join((text or "").split())
+                if text or links.get(ref):
+                    cells[re.match(r"[A-Z]+", ref).group()] = (text, links.get(ref, ""))
+            rows.append((int(row.get("r")), cells))
+        sheets[tab.get("name")] = rows
+    return sheets
 
 
 def env_of(raw, group):
@@ -91,50 +100,74 @@ COLUMNS = {"project name": "name", "deployment": "env", "hyperlink": "url", "sec
            "status": "status", "server": "server", "website": "website", "note": "note"}
 
 
+def header_columns(texts, columns):
+    cols = {}
+    for col, text in texts.items():
+        field = next((f for key, f in columns.items() if text.lower().startswith(key)), None)
+        if field and field not in cols.values():
+            cols[col] = field
+    return cols
+
+
 def parse(xlsx):
-    group, cols, out = "projects", {}, []
-    for _, cells in read_cells(xlsx):
+    """(deployment rows, sections in sheet order) from the first tab with a "Project Name" header."""
+    for cells_by_row in read_sheets(xlsx).values():
+        rows, sections = parse_deployments(cells_by_row)
+        if rows:
+            return rows, sections
+    return [], []
+
+
+def parse_deployments(cells_by_row):
+    section, group, cols, out, sections = "", "projects", {}, [], []
+    for _, cells in cells_by_row:
         texts = {col: text for col, (text, _) in cells.items()}
         if not cols:
             # Everything above the header row (the one with "Project Name") is ignored
-            for col, text in texts.items():
-                field = next((f for key, f in COLUMNS.items() if text.lower().startswith(key)), None)
-                if field and field not in cols.values():
-                    cols[col] = field
+            cols = header_columns(texts, COLUMNS)
             if "name" not in cols.values():
                 cols = {}
             continue
         row = {field: texts.get(col, "") for col, field in cols.items()}
         if not row.get("name"):
-            # Heading rows ("Projects", "Pilots") only fill column A
+            # Heading rows only fill column A: "Projects"/"Pilots" split a section, anything else starts one
             a = texts.get("A", "")
             if a and not a.isdigit():
-                group = "pilots" if "pilot" in a.lower() else re.sub(r"[^a-z0-9]+", "-", a.lower()).strip("-")
+                if "pilot" in a.lower():
+                    group = "pilots"
+                elif "project" in a.lower():
+                    group = "projects"
+                else:
+                    section, group = a, "projects"
+                    if a.lower() not in (x["name"].lower() for x in sections):
+                        sections.append({"name": a})
             continue
         url_col = next((c for c, f in cols.items() if f == "url"), None)
         link = cells.get(url_col, ("", ""))[1] if url_col else ""
         text = row.get("url", "")
         row["url"] = link or (text if re.match(r"https?://", text) else "")
         row["env"] = env_of(row.get("env", ""), group)
+        # An old-style Section column, if still there, wins over the heading
+        row["section"] = row.get("section") or section
         out.append({"group": group, **{k: v for k, v in row.items() if v}})
-    return out
+    return out, sections
 
 
-def write(rows):
-    """Rewrite sheet.js if the rows changed. Returns True when it did."""
+def write(rows, sections):
+    """Rewrite sheet.js if the rows or sections changed. Returns True when it did."""
     old = None
     if OUT.exists():
         m = re.search(r"=\s*(\{.*\});?\s*$", OUT.read_text(), re.S)
         old = json.loads(m.group(1)) if m else None
-    if old and old.get("rows") == rows:
-        print(f"sheet.js already up to date ({len(rows)} rows)")
+    if old and old.get("rows") == rows and old.get("sections", []) == sections:
+        print(f"sheet.js already up to date ({len(rows)} rows, {len(sections)} sections)")
         return False
-    data = {"updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "rows": rows}
+    data = {"updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "sections": sections, "rows": rows}
     OUT.write_text(
         "// Generated by scripts/sync_sheet.py from the \"Thunder Projects and Pilots\" sheet. Do not edit;\n"
-        "// change the sheet instead. Section names and server specs live in deployments.js.\n"
+        "// change the sheet instead. Server specs live in deployments.js.\n"
         "window.THUNDER_SHEET = " + json.dumps(data, indent=1, ensure_ascii=False) + ";\n")
-    print(f"Wrote sheet.js ({len(rows)} rows)")
+    print(f"Wrote sheet.js ({len(rows)} rows, {len(sections)} sections)")
     return True
 
 
@@ -143,10 +176,10 @@ def main():
     if not src:
         sys.exit("Pass a local .xlsx path or set SHEET_URL to the sheet's share link.")
     xlsx = download(src) if re.match(r"https?://", src) else Path(src).read_bytes()
-    rows = parse(xlsx)
+    rows, sections = parse(xlsx)
     if not rows:
         sys.exit("No rows found in the sheet; leaving sheet.js unchanged.")
-    write(rows)
+    write(rows, sections)
 
 
 if __name__ == "__main__":
